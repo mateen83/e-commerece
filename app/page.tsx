@@ -89,11 +89,11 @@ export default function HomePage() {
         </section>
 
         {/* Setup Banner - shows when no data yet */}
-        <section className="py-8 md:py-12">
+        {/* <section className="py-8 md:py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <SetupBanner />
           </div>
-        </section>
+        </section> */}
 
         {/* Categories Section */}
         <section className="py-12 md:py-16">
