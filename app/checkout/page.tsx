@@ -137,21 +137,21 @@ export default function CheckoutPage() {
     <div className="flex flex-col min-h-screen">
       <Header />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Back Button */}
         <Button
           onClick={() => router.back()}
           variant="outline"
-          className="mb-8 gap-2"
+          className="mb-4 sm:mb-8 gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </Button>
 
-        <h1 className="text-3xl font-bold mb-8">Checkout</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-8">Checkout</h1>
 
         {/* Progress Indicator */}
-        <div className="mb-8 flex gap-2">
+        <div className="mb-4 sm:mb-8 flex gap-1 sm:gap-2">
           {(['shipping', 'payment', 'review'] as const).map((s, index) => (
             <div key={s} className="flex items-center gap-2">
               <div
@@ -168,7 +168,7 @@ export default function CheckoutPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Shipping Address Step */}

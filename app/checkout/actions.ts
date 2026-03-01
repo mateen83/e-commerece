@@ -83,6 +83,46 @@ export async function processCheckout(formData: {
                 .eq('user_id', userId);
         }
 
+        // 7. Fetch product names for the email
+        const productIds = formData.items.map(i => i.product_id);
+        const { data: products } = await supabase
+            .from('products')
+            .select('id, name')
+            .in('id', productIds);
+
+        const productMap = new Map(products?.map(p => [p.id, p.name]) || []);
+
+        // 8. Send order confirmation emails (fire-and-forget, don't block checkout)
+        try {
+            const origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+            await fetch(`${origin}/api/send-order-confirmation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userEmail: formData.email,
+                    orderNumber: order.order_number,
+                    items: formData.items.map(item => ({
+                        name: productMap.get(item.product_id) || `Product ${item.product_id}`,
+                        quantity: item.quantity,
+                        price: item.price,
+                    })),
+                    subtotal: formData.subtotal,
+                    tax: formData.tax,
+                    shipping: formData.shipping,
+                    total: formData.subtotal + formData.tax + formData.shipping,
+                    shippingInfo: {
+                        fullName: formData.fullName,
+                        address: formData.address,
+                        city: formData.city,
+                        postalCode: formData.postalCode,
+                        phone: formData.phone,
+                    },
+                }),
+            });
+        } catch (emailError) {
+            console.error('Failed to send order emails (non-blocking):', emailError);
+        }
+
         return { success: true, orderId: order.id, orderNumber: order.order_number };
     } catch (error: any) {
         console.error('Checkout error:', error);

@@ -128,10 +128,10 @@ export default function CartPage() {
     <div className="flex flex-col min-h-screen">
       <Header />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold mb-8">Shopping Cart</h1>
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-8">Shopping Cart</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
             {items.map((item) => {
@@ -145,9 +145,9 @@ export default function CartPage() {
               return (
                 <Card key={item.id}>
                   <CardContent className="p-4">
-                    <div className="flex gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4">
                       {/* Product Image */}
-                      <div className="flex-shrink-0 w-20 h-20 rounded border bg-muted overflow-hidden">
+                      <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border bg-muted overflow-hidden">
                         <Image
                           src={item.product.image_url || '/placeholder-product.jpg'}
                           alt={item.product.name}
@@ -157,9 +157,9 @@ export default function CartPage() {
                         />
                       </div>
 
-                      {/* Product Info */}
-                      <div className="flex-1">
-                        <h3 className="font-semibold hover:text-primary transition-colors">
+                      {/* Product Info + Controls */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold hover:text-primary transition-colors text-sm sm:text-base truncate">
                           <Link href={`/products/${item.product.slug}`}>
                             {item.product.name}
                           </Link>
@@ -170,49 +170,49 @@ export default function CartPage() {
                           </span>
                           {discount > 0 && (
                             <>
-                              <span className="text-muted-foreground line-through">
+                              <span className="text-muted-foreground line-through text-xs">
                                 PKR {originalPrice.toLocaleString()}
                               </span>
                               <span className="text-red-500 text-xs">-{discount}%</span>
                             </>
                           )}
                         </div>
-                      </div>
 
-                      {/* Quantity and Price */}
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="flex items-center border rounded-lg">
-                          <button
-                            onClick={() =>
-                              handleQuantityChange(item.id, item.quantity - 1)
-                            }
-                            className="px-2 py-1 text-muted-foreground hover:bg-muted"
-                            disabled={item.quantity <= 1}
-                          >
-                            −
-                          </button>
-                          <span className="px-3 py-1 border-l border-r text-sm font-medium">
-                            {item.quantity}
+                        {/* Quantity + Remove (inline on mobile) */}
+                        <div className="flex items-center justify-between mt-3 sm:mt-2">
+                          <div className="flex items-center border rounded-lg">
+                            <button
+                              onClick={() =>
+                                handleQuantityChange(item.id, item.quantity - 1)
+                              }
+                              className="px-2 py-1 text-muted-foreground hover:bg-muted"
+                              disabled={item.quantity <= 1}
+                            >
+                              −
+                            </button>
+                            <span className="px-3 py-1 border-l border-r text-sm font-medium">
+                              {item.quantity}
+                            </span>
+                            <button
+                              onClick={() =>
+                                handleQuantityChange(item.id, item.quantity + 1)
+                              }
+                              className="px-2 py-1 text-muted-foreground hover:bg-muted"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span className="text-sm font-semibold">
+                            PKR {(displayPrice * item.quantity).toLocaleString()}
                           </span>
                           <button
-                            onClick={() =>
-                              handleQuantityChange(item.id, item.quantity + 1)
-                            }
-                            className="px-2 py-1 text-muted-foreground hover:bg-muted"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="text-red-500 hover:text-red-600 text-sm font-medium flex items-center gap-1"
                           >
-                            +
+                            <Trash2 className="w-4 h-4" />
+                            <span className="hidden sm:inline">Remove</span>
                           </button>
                         </div>
-                        <span className="text-sm font-semibold">
-                          PKR {(displayPrice * item.quantity).toLocaleString()}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="text-red-500 hover:text-red-600 text-sm font-medium flex items-center gap-1"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Remove
-                        </button>
                       </div>
                     </div>
                   </CardContent>
