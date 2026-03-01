@@ -1,17 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ShoppingCart, Search, User, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { createClient } from '@/lib/supabase/client';
 
 export function Header() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userInitial, setUserInitial] = useState('');
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setIsLoggedIn(true);
+        setUserInitial((user.email?.[0] || 'U').toUpperCase());
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setIsLoggedIn(true);
+        setUserInitial((session.user.email?.[0] || 'U').toUpperCase());
+      } else {
+        setIsLoggedIn(false);
+        setUserInitial('');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,8 +86,14 @@ export function Header() {
           {/* Right side icons */}
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild className="hidden sm:flex">
-              <Link href="/account">
-                <User className="w-5 h-5" />
+              <Link href={isLoggedIn ? '/account' : '/auth/login'}>
+                {isLoggedIn ? (
+                  <span className="w-7 h-7 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">
+                    {userInitial}
+                  </span>
+                ) : (
+                  <User className="w-5 h-5" />
+                )}
               </Link>
             </Button>
 
@@ -112,12 +143,12 @@ export function Header() {
 
                   <div className="border-t pt-4 mt-4">
                     <Link
-                      href="/account"
+                      href={isLoggedIn ? '/account' : '/auth/login'}
                       onClick={() => setIsOpen(false)}
                       className="flex items-center gap-2 text-base hover:text-primary transition-colors"
                     >
                       <User className="w-4 h-4" />
-                      Account
+                      {isLoggedIn ? 'My Account' : 'Login'}
                     </Link>
                   </div>
                 </div>

@@ -109,18 +109,18 @@ export async function clearCart(userId: string) {
   if (error) throw new Error(`Failed to clear cart: ${error.message}`);
 }
 
-export function calculateShippingCost(city: string): number {
+export async function calculateShippingCost(city: string): Promise<number> {
   return SHIPPING_COSTS[city] || 500; // Default to 500 PKR if city not found
 }
 
-export function calculateCartTotal(subtotal: number, city?: string): {
+export async function calculateCartTotal(subtotal: number, city?: string): Promise<{
   subtotal: number;
   tax: number;
   shipping: number;
   total: number;
-} {
+}> {
   const tax = subtotal * TAX_RATE;
-  const shipping = city ? calculateShippingCost(city) : 0;
+  const shipping = city ? await calculateShippingCost(city) : 0;
   const total = subtotal + tax + shipping;
 
   return { subtotal, tax, shipping, total };

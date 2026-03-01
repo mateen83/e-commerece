@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
+import { Turnstile } from '@marsidev/react-turnstile'
 
 export default function Page() {
   const [email, setEmail] = useState('')
@@ -22,34 +23,45 @@ export default function Page() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+
   const router = useRouter()
+  const supabase = createClient()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
-    setIsLoading(true)
     setError(null)
 
+    if (!captchaToken) {
+      setError('Please complete the captcha verification.')
+      return
+    }
+
+    setIsLoading(true)
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
-            `${window.location.origin}/protected`,
-        },
+        options: { captchaToken }, // <-- only captchaToken allowed
       })
+
       if (error) throw error
-      router.push('/protected')
-    } catch (error: any) {
-      if (error?.message?.includes('Email not confirmed') || error?.message?.includes('Invalid login credentials')) {
-        setError('Invalid login credentials. If you just signed up, please check your email to verify your account before logging in.')
+      router.push('/account') // manually redirect after successful login
+    } catch (err: any) {
+      if (err?.message?.includes('Email not confirmed')) {
+        setError('Please confirm your email before logging in.')
+      } else if (err?.message?.includes('captcha')) {
+        setError('Captcha verification failed. Please try again.')
+      } else if (err?.message?.includes('Invalid login credentials')) {
+        setError(
+          'Invalid login credentials. Please check your email and password.'
+        )
       } else {
-        setError(error instanceof Error ? error.message : 'An error occurred')
+        setError(err instanceof Error ? err.message : 'An error occurred')
       }
     } finally {
       setIsLoading(false)
+      setCaptchaToken(null) // reset captcha for next attempt
     }
   }
 
@@ -67,6 +79,7 @@ export default function Page() {
             <CardContent>
               <form onSubmit={handleLogin}>
                 <div className="flex flex-col gap-6">
+                  {/* Email */}
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -78,12 +91,19 @@ export default function Page() {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
+
+                  {/* Password */}
                   <div className="grid gap-2">
-                    <Label htmlFor="password">Password</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Password</Label>
+                      <Link href="/auth/forgot-password" className="text-sm font-medium hover:underline text-muted-foreground">
+                        Forgot password?
+                      </Link>
+                    </div>
                     <div className="relative">
                       <Input
                         id="password"
-                        type={showPassword ? "text" : "password"}
+                        type={showPassword ? 'text' : 'password'}
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -101,17 +121,27 @@ export default function Page() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Turnstile Captcha */}
+                  <Turnstile
+                    siteKey="0x4AAAAAACkg1L-MlpvI51Eg"
+                    onSuccess={(token) => setCaptchaToken(token)}
+                    onExpire={() => setCaptchaToken(null)}
+                  />
+
+                  {/* Error */}
                   {error && <p className="text-sm text-red-500">{error}</p>}
+
+                  {/* Submit */}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? 'Logging in...' : 'Login'}
                   </Button>
                 </div>
+
+                {/* Link to signup */}
                 <div className="mt-4 text-center text-sm">
                   Don&apos;t have an account?{' '}
-                  <Link
-                    href="/auth/signup"
-                    className="underline underline-offset-4"
-                  >
+                  <Link href="/auth/signup" className="underline underline-offset-4">
                     Sign up
                   </Link>
                 </div>

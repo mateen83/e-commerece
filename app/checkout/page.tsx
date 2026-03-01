@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
@@ -20,11 +20,16 @@ import {
 import { PAKISTAN_CITIES } from '@/lib/types/database';
 import { ArrowLeft, Truck, CreditCard, Loader2 } from 'lucide-react';
 import { processCheckout } from './actions';
+import { createClient } from '@/lib/supabase/client';
+import { getCart } from '@/lib/services/cart';
 
 export default function CheckoutPage() {
   const router = useRouter();
   const [step, setStep] = useState<'shipping' | 'payment' | 'review'>('shipping');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [cartData, setCartData] = useState<any>(null);
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -34,6 +39,33 @@ export default function CheckoutPage() {
     postalCode: '',
   });
   const [paymentMethod, setPaymentMethod] = useState('COD');
+
+  useEffect(() => {
+    const init = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push('/auth/login?next=/checkout');
+        return;
+      }
+
+      try {
+        const cart = await getCart(user.id);
+        if (!cart.items || cart.items.length === 0) {
+          router.push('/cart');
+          return;
+        }
+        setCartData(cart);
+        setFormData((prev) => ({ ...prev, email: user.email || '' }));
+      } catch (e) {
+        console.error('Failed to load cart data:', e);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    init();
+  }, [router]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -56,10 +88,15 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
+    if (!cartData) return;
     setIsLoading(true);
 
-    // In a real app, these items/totals would come from a Cart Context/State
-    // We are hardcoding them here for the demo based on the current UI text
+    const convertedItems = cartData.items.map((item: any) => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      price: item.product.discount_price || item.product.price
+    }));
+
     const response = await processCheckout({
       fullName: formData.fullName,
       email: formData.email,
@@ -68,13 +105,10 @@ export default function CheckoutPage() {
       city: formData.city,
       postalCode: formData.postalCode,
       paymentMethodCode: paymentMethod,
-      items: [
-        { product_id: '1', quantity: 1, price: 3499 },
-        { product_id: '2', quantity: 2, price: 699 }
-      ],
-      subtotal: 4198,
-      tax: 714,
-      shipping: 0
+      items: convertedItems,
+      subtotal: cartData.subtotal,
+      tax: cartData.tax,
+      shipping: cartData.shipping_cost
     });
 
     setIsLoading(false);
@@ -85,6 +119,19 @@ export default function CheckoutPage() {
       alert(`Failed to place order: ${response.error}`);
     }
   };
+
+  if (isInitializing) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 flex flex-col items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Preparing checkout...</p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -109,8 +156,8 @@ export default function CheckoutPage() {
             <div key={s} className="flex items-center gap-2">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${step === s || ['shipping', 'payment', 'review'].indexOf(step) > index
-                    ? 'bg-primary text-white'
-                    : 'bg-muted text-muted-foreground'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted text-muted-foreground'
                   }`}
               >
                 {index + 1}
@@ -149,7 +196,7 @@ export default function CheckoutPage() {
                       <Input
                         id="email"
                         type="email"
-                        placeholder="john@example.com"
+                        disabled
                         value={formData.email}
                         onChange={(e) => handleInputChange('email', e.target.value)}
                       />
@@ -305,19 +352,21 @@ export default function CheckoutPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
-                    <span>PKR 4,198</span>
+                    <span>PKR {cartData?.subtotal?.toLocaleString() || 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Tax (17%)</span>
-                    <span>PKR 714</span>
+                    <span>PKR {cartData?.tax?.toLocaleString() || 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Shipping</span>
-                    <span className="text-green-600">FREE</span>
+                    <span className={cartData?.shipping_cost === 0 ? "text-green-600" : ""}>
+                      {cartData?.shipping_cost === 0 ? "FREE" : `PKR ${cartData?.shipping_cost?.toLocaleString() || 0}`}
+                    </span>
                   </div>
                   <div className="border-t pt-2 flex justify-between font-bold">
                     <span>Total</span>
-                    <span>PKR 4,912</span>
+                    <span>PKR {cartData?.total?.toLocaleString() || 0}</span>
                   </div>
                 </div>
 

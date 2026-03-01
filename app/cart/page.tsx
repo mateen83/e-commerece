@@ -8,41 +8,39 @@ import { Footer } from '@/components/footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Trash2, ArrowRight } from 'lucide-react';
-import { useState } from 'react';
-
-// Sample cart data
-const sampleCart = [
-  {
-    id: '1',
-    product: {
-      id: 'p1',
-      name: 'Premium Wireless Headphones',
-      slug: 'premium-wireless-headphones',
-      image_url: '/placeholder-product.jpg',
-      price: 4999,
-      discount_price: 3499,
-    },
-    quantity: 1,
-  },
-  {
-    id: '2',
-    product: {
-      id: 'p2',
-      name: 'Smartphone Case',
-      slug: 'smartphone-case',
-      image_url: '/placeholder-product.jpg',
-      price: 999,
-      discount_price: 699,
-    },
-    quantity: 2,
-  },
-];
+import { Trash2, ArrowRight, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { getCart, updateCartItem, removeFromCart } from '@/lib/services/cart';
 
 export default function CartPage() {
   const router = useRouter();
-  const [items, setItems] = useState(sampleCart);
+  const [items, setItems] = useState<any[]>([]);
   const [couponCode, setCouponCode] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  const fetchCartItems = async (uid: string) => {
+    try {
+      const cart = await getCart(uid);
+      setItems(cart.items || []);
+    } catch (error) {
+      console.error('Failed to load cart:', error);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        await fetchCartItems(user.id);
+      }
+      setIsLoading(false);
+    };
+    init();
+  }, []);
 
   // Calculate totals
   const subtotal = items.reduce((sum, item) => {
@@ -54,36 +52,70 @@ export default function CartPage() {
   const shipping = subtotal > 5000 ? 0 : 300;
   const total = subtotal + tax + shipping;
 
-  const handleQuantityChange = (itemId: string, newQuantity: number) => {
+  const handleQuantityChange = async (itemId: string, newQuantity: number) => {
+    if (!userId) return;
     if (newQuantity <= 0) {
-      handleRemoveItem(itemId);
+      await handleRemoveItem(itemId);
       return;
     }
-    setItems(
-      items.map((item) =>
+    // Optimistic UI update
+    setItems((prev) =>
+      prev.map((item) =>
         item.id === itemId ? { ...item, quantity: newQuantity } : item
       )
     );
+    try {
+      await updateCartItem(userId, itemId, newQuantity);
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      // Revert on error
+      await fetchCartItems(userId);
+    }
   };
 
-  const handleRemoveItem = (itemId: string) => {
-    setItems(items.filter((item) => item.id !== itemId));
+  const handleRemoveItem = async (itemId: string) => {
+    if (!userId) return;
+    try {
+      // Optimistic UI update
+      setItems((prev) => prev.filter((item) => item.id !== itemId));
+      await removeFromCart(userId, itemId);
+    } catch (error) {
+      console.error('Error removing item:', error);
+      await fetchCartItems(userId);
+    }
   };
 
   const handleCheckout = () => {
     router.push('/checkout');
   };
 
-  if (items.length === 0) {
+  if (isLoading) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 flex flex-col items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Loading your cart...</p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!userId || items.length === 0) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold">Your Cart is Empty</h1>
-            <p className="text-muted-foreground">Add some items to get started!</p>
+            <h1 className="text-2xl font-bold">{!userId ? 'Please Log In' : 'Your Cart is Empty'}</h1>
+            <p className="text-muted-foreground">
+              {!userId ? 'Log in to view your cart items.' : 'Add some items to get started!'}
+            </p>
             <Button asChild className="bg-primary text-white hover:bg-primary/90">
-              <Link href="/products">Continue Shopping</Link>
+              <Link href={!userId ? "/auth/login" : "/products"}>
+                {!userId ? 'Log In' : 'Continue Shopping'}
+              </Link>
             </Button>
           </div>
         </main>
@@ -134,7 +166,7 @@ export default function CartPage() {
                         </h3>
                         <div className="flex items-center gap-2 mt-1 text-sm">
                           <span className="text-primary font-bold">
-                            PKR {displayPrice.toLocaleString()}
+                            PKR {displayPrice ? displayPrice.toLocaleString() : '0'}
                           </span>
                           {discount > 0 && (
                             <>
@@ -155,6 +187,7 @@ export default function CartPage() {
                               handleQuantityChange(item.id, item.quantity - 1)
                             }
                             className="px-2 py-1 text-muted-foreground hover:bg-muted"
+                            disabled={item.quantity <= 1}
                           >
                             −
                           </button>
