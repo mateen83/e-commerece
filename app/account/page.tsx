@@ -13,6 +13,58 @@ import { User, MapPin, Heart, LogOut, ShoppingBag, Activity } from 'lucide-react
 import { createClient } from '@/lib/supabase/client';
 import { useEffect } from 'react';
 
+function ProfileInfo() {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-4 bg-muted rounded-lg">
+        <p className="text-sm text-muted-foreground">Loading profile...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="p-4 bg-muted rounded-lg text-center">
+        <p className="text-sm text-muted-foreground">Please log in to view your profile.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</p>
+          <p className="text-sm font-semibold">{user.email}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">User ID</p>
+          <p className="text-sm font-mono text-muted-foreground truncate">{user.id}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Member Since</p>
+          <p className="text-sm font-semibold">{new Date(user.created_at).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email Verified</p>
+          <p className="text-sm font-semibold">{user.email_confirmed_at ? '✅ Verified' : '❌ Not verified'}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AccountPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -103,12 +155,10 @@ export default function AccountPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Profile Information</CardTitle>
-                  <CardDescription>Update your personal details</CardDescription>
+                  <CardDescription>Your account details</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-2">Loading profile information...</p>
-                  </div>
+                  <ProfileInfo />
                 </CardContent>
               </Card>
             </TabsContent>

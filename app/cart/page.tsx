@@ -8,10 +8,24 @@ import { Footer } from '@/components/footer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Trash2, ArrowRight, Loader2 } from 'lucide-react';
+import { Trash2, ArrowRight, Loader2, ShoppingCart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getCart, updateCartItem, removeFromCart } from '@/lib/services/cart';
+
+// ---- localStorage helpers for guest cart ----
+function getGuestCart(): any[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem('guest_cart') || '[]');
+  } catch { return []; }
+}
+
+function setGuestCart(items: any[]) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('guest_cart', JSON.stringify(items));
+  }
+}
 
 export default function CartPage() {
   const router = useRouter();
@@ -36,6 +50,9 @@ export default function CartPage() {
       if (user) {
         setUserId(user.id);
         await fetchCartItems(user.id);
+      } else {
+        // Guest: load from localStorage
+        setItems(getGuestCart());
       }
       setIsLoading(false);
     };
@@ -44,7 +61,8 @@ export default function CartPage() {
 
   // Calculate totals
   const subtotal = items.reduce((sum, item) => {
-    const price = item.product.discount_price || item.product.price;
+    const product = item.product || item;
+    const price = product.discount_price || product.price || 0;
     return sum + price * item.quantity;
   }, 0);
 
@@ -53,35 +71,44 @@ export default function CartPage() {
   const total = subtotal + tax + shipping;
 
   const handleQuantityChange = async (itemId: string, newQuantity: number) => {
-    if (!userId) return;
     if (newQuantity <= 0) {
       await handleRemoveItem(itemId);
       return;
     }
+
     // Optimistic UI update
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
-      )
-    );
-    try {
-      await updateCartItem(userId, itemId, newQuantity);
-    } catch (error) {
-      console.error('Error updating quantity:', error);
-      // Revert on error
-      await fetchCartItems(userId);
+    setItems((prev) => {
+      const updated = prev.map((item) =>
+        (item.id === itemId) ? { ...item, quantity: newQuantity } : item
+      );
+      if (!userId) setGuestCart(updated);
+      return updated;
+    });
+
+    if (userId) {
+      try {
+        await updateCartItem(userId, itemId, newQuantity);
+      } catch (error) {
+        console.error('Error updating quantity:', error);
+        await fetchCartItems(userId);
+      }
     }
   };
 
   const handleRemoveItem = async (itemId: string) => {
-    if (!userId) return;
-    try {
-      // Optimistic UI update
-      setItems((prev) => prev.filter((item) => item.id !== itemId));
-      await removeFromCart(userId, itemId);
-    } catch (error) {
-      console.error('Error removing item:', error);
-      await fetchCartItems(userId);
+    setItems((prev) => {
+      const updated = prev.filter((item) => item.id !== itemId);
+      if (!userId) setGuestCart(updated);
+      return updated;
+    });
+
+    if (userId) {
+      try {
+        await removeFromCart(userId, itemId);
+      } catch (error) {
+        console.error('Error removing item:', error);
+        await fetchCartItems(userId);
+      }
     }
   };
 
@@ -102,20 +129,19 @@ export default function CartPage() {
     );
   }
 
-  if (!userId || items.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold">{!userId ? 'Please Log In' : 'Your Cart is Empty'}</h1>
+            <ShoppingCart className="w-16 h-16 mx-auto text-muted-foreground/50" />
+            <h1 className="text-2xl font-bold">Your Cart is Empty</h1>
             <p className="text-muted-foreground">
-              {!userId ? 'Log in to view your cart items.' : 'Add some items to get started!'}
+              Browse our products and add items to your cart!
             </p>
             <Button asChild className="bg-primary text-white hover:bg-primary/90">
-              <Link href={!userId ? "/auth/login" : "/products"}>
-                {!userId ? 'Log In' : 'Continue Shopping'}
-              </Link>
+              <Link href="/products">Continue Shopping</Link>
             </Button>
           </div>
         </main>
@@ -135,8 +161,9 @@ export default function CartPage() {
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
             {items.map((item) => {
-              const displayPrice = item.product.discount_price || item.product.price;
-              const originalPrice = item.product.price;
+              const product = item.product || item;
+              const displayPrice = product.discount_price || product.price || 0;
+              const originalPrice = product.price || 0;
               const discount =
                 displayPrice !== originalPrice
                   ? Math.round(((originalPrice - displayPrice) / originalPrice) * 100)
@@ -149,8 +176,8 @@ export default function CartPage() {
                       {/* Product Image */}
                       <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border bg-muted overflow-hidden">
                         <Image
-                          src={item.product.image_url || '/placeholder-product.jpg'}
-                          alt={item.product.name}
+                          src={product.image_url || '/placeholder-product.jpg'}
+                          alt={product.name || 'Product'}
                           width={80}
                           height={80}
                           className="w-full h-full object-cover"
@@ -160,13 +187,13 @@ export default function CartPage() {
                       {/* Product Info + Controls */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold hover:text-primary transition-colors text-sm sm:text-base truncate">
-                          <Link href={`/products/${item.product.slug}`}>
-                            {item.product.name}
+                          <Link href={`/products/${product.slug || '#'}`}>
+                            {product.name || 'Product'}
                           </Link>
                         </h3>
                         <div className="flex items-center gap-2 mt-1 text-sm">
                           <span className="text-primary font-bold">
-                            PKR {displayPrice ? displayPrice.toLocaleString() : '0'}
+                            PKR {displayPrice.toLocaleString()}
                           </span>
                           {discount > 0 && (
                             <>
@@ -178,13 +205,11 @@ export default function CartPage() {
                           )}
                         </div>
 
-                        {/* Quantity + Remove (inline on mobile) */}
+                        {/* Quantity + Remove */}
                         <div className="flex items-center justify-between mt-3 sm:mt-2">
                           <div className="flex items-center border rounded-lg">
                             <button
-                              onClick={() =>
-                                handleQuantityChange(item.id, item.quantity - 1)
-                              }
+                              onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
                               className="px-2 py-1 text-muted-foreground hover:bg-muted"
                               disabled={item.quantity <= 1}
                             >
@@ -194,9 +219,7 @@ export default function CartPage() {
                               {item.quantity}
                             </span>
                             <button
-                              onClick={() =>
-                                handleQuantityChange(item.id, item.quantity + 1)
-                              }
+                              onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
                               className="px-2 py-1 text-muted-foreground hover:bg-muted"
                             >
                               +
@@ -251,7 +274,7 @@ export default function CartPage() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Tax (17% GST)</span>
-                    <span>PKR {tax.toLocaleString()}</span>
+                    <span>PKR {Math.round(tax).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Shipping</span>
@@ -265,7 +288,7 @@ export default function CartPage() {
                   </div>
                   <div className="border-t pt-4 flex justify-between font-bold text-lg">
                     <span>Total</span>
-                    <span>PKR {total.toLocaleString()}</span>
+                    <span>PKR {Math.round(total).toLocaleString()}</span>
                   </div>
                 </div>
 

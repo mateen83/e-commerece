@@ -45,24 +45,45 @@ export default function CheckoutPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      if (!user) {
-        router.push('/auth/login?next=/checkout');
-        return;
-      }
-
-      try {
-        const cart = await getCart(user.id);
-        if (!cart.items || cart.items.length === 0) {
+      if (user) {
+        // Logged-in user: load cart from Supabase
+        try {
+          const cart = await getCart(user.id);
+          if (!cart.items || cart.items.length === 0) {
+            router.push('/cart');
+            return;
+          }
+          setCartData(cart);
+          setFormData((prev) => ({ ...prev, email: user.email || '' }));
+        } catch (e) {
+          console.error('Failed to load cart data:', e);
+        }
+      } else {
+        // Guest user: load cart from localStorage
+        try {
+          const guestItems = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+          if (guestItems.length === 0) {
+            router.push('/cart');
+            return;
+          }
+          const subtotal = guestItems.reduce((sum: number, item: any) => {
+            const p = item.product || item;
+            return sum + (p.discount_price || p.price || 0) * item.quantity;
+          }, 0);
+          setCartData({
+            items: guestItems,
+            subtotal,
+            tax: subtotal * 0.17,
+            shipping_cost: subtotal > 5000 ? 0 : 300,
+            total: subtotal + subtotal * 0.17 + (subtotal > 5000 ? 0 : 300),
+          });
+        } catch (e) {
+          console.error('Failed to load guest cart:', e);
           router.push('/cart');
           return;
         }
-        setCartData(cart);
-        setFormData((prev) => ({ ...prev, email: user.email || '' }));
-      } catch (e) {
-        console.error('Failed to load cart data:', e);
-      } finally {
-        setIsInitializing(false);
       }
+      setIsInitializing(false);
     };
     init();
   }, [router]);
