@@ -1,68 +1,53 @@
-import { Suspense } from 'react';
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { ProductCard } from '@/components/product-card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SetupBanner } from '@/components/setup-banner';
-import { getProducts, getCategories } from '@/lib/services/products';
-
-async function FeaturedProducts() {
-  const products = await getProducts(8, 0);
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
-      ))}
-    </div>
-  );
-}
-
-function FeaturedProductsSkeleton() {
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {[...Array(8)].map((_, i) => (
-        <div key={i} className="border rounded-lg overflow-hidden">
-          <Skeleton className="aspect-square" />
-          <div className="p-4 space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-6 w-1/2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-async function Categories() {
-  const categories = await getCategories();
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {categories.slice(0, 8).map((category) => (
-        <Link
-          key={category.id}
-          href={`/category/${category.slug}`}
-          className="p-6 rounded-lg border hover:border-primary hover:shadow-md transition-all text-center group"
-        >
-          {category.image_url && (
-            <img
-              src={category.image_url}
-              alt={category.name}
-              className="w-16 h-16 mx-auto mb-3 object-contain group-hover:scale-110 transition-transform"
-            />
-          )}
-          <h3 className="font-medium text-sm">{category.name}</h3>
-        </Link>
-      ))}
-    </div>
-  );
-}
+import { createClient } from '@/lib/supabase/client';
 
 export default function HomePage() {
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const supabase = createClient();
+
+        const [productsResult, categoriesResult] = await Promise.all([
+          supabase
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(8),
+          supabase
+            .from('categories')
+            .select('*')
+            .is('parent_id', null)
+            .order('name', { ascending: true })
+        ]);
+
+        if (!productsResult.error && productsResult.data) {
+          setProducts(productsResult.data);
+        }
+        if (!categoriesResult.error && categoriesResult.data) {
+          setCategories(categoriesResult.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
@@ -88,18 +73,38 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Setup Banner - shows when no data yet */}
-        {/* <section className="py-8 md:py-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <SetupBanner />
-          </div>
-        </section> */}
-
         {/* Categories Section */}
         <section className="py-12 md:py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-2xl md:text-3xl font-bold mb-8">Shop by Category</h2>
-            <Categories />
+            {isLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[...Array(8)].map((_, i) => (
+                  <Skeleton key={i} className="h-32 rounded-lg" />
+                ))}
+              </div>
+            ) : categories.length === 0 ? (
+              <p className="text-muted-foreground">No categories found.</p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {categories.slice(0, 8).map((category) => (
+                  <Link
+                    key={category.id}
+                    href={`/category/${category.slug}`}
+                    className="p-6 rounded-lg border hover:border-primary hover:shadow-md transition-all text-center group"
+                  >
+                    {category.image_url && (
+                      <img
+                        src={category.image_url}
+                        alt={category.name}
+                        className="w-16 h-16 mx-auto mb-3 object-contain group-hover:scale-110 transition-transform"
+                      />
+                    )}
+                    <h3 className="font-medium text-sm">{category.name}</h3>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -112,9 +117,34 @@ export default function HomePage() {
                 <Link href="/products">View All</Link>
               </Button>
             </div>
-            <Suspense fallback={<FeaturedProductsSkeleton />}>
-              <FeaturedProducts />
-            </Suspense>
+
+            {isLoading ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="border rounded-lg overflow-hidden">
+                    <Skeleton className="aspect-square" />
+                    <div className="p-4 space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-6 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : products.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-2">No products found</p>
+                <p className="text-sm text-muted-foreground">
+                  Run the seed script in Supabase to see products here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {products.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
